@@ -7,20 +7,20 @@ Usage:
 Decompress .data section from a Keil compiled firmware
 
 USAGE:
-    armkeil-ram-extractor [OPTIONS] --firmware <FIRMWARE> --output <OUTPUT>
+    armkeil-ram-extractor [OPTIONS] --rom <ROM> --output <OUTPUT>
 
 OPTIONS:
-        --base-ram <BASE_RAM>        Base RAM address
-        --base-rom <BASE_ROM>        Base ROM address
-    -h, --help                       Print help information
-    -o, --output <OUTPUT>            File where to write the RAM content
     -r, --rom <ROM>                  Firmware file
+    -o, --output <OUTPUT>            File where to write the RAM content
+        --skip <SKIP>                Vector table offset. Useful when the firmware has a bootloader
+                                     to skip [default: 0]
+        --base-rom <BASE_ROM>        Base ROM address
+        --base-ram <BASE_RAM>        Base RAM address
+        --start-addr <START_ADDR>    Initial PC address. Address should be an odd number to be in
+                                     thumb mode
+        --stop-addr <STOP_ADDR>      PC address at which to stop the emulation
         --ram-size <RAM_SIZE>        RAM size [default: 1048576]
-        --start-addr <START_ADDR>    Initial PC address. Don't forget to add 1 to be in thumb mode
-        --stop-addr <STOP_ADDR>      PC address at which to stop the emulation. If not specified,
-                                     will stop if executing at an address lower than the reset
-                                     address
-
+    -h, --help                       Print help information
 ```
 
 Example:
