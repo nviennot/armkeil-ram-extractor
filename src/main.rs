@@ -62,7 +62,7 @@ fn round_up(n: usize, boundary: usize) -> usize {
     ((n + boundary - 1) / boundary) * boundary
 }
 
-fn find_last_non_zero_byte(buf: &[u8]) -> usize {
+fn find_last_non_zero_byte_idx(buf: &[u8]) -> usize {
     let mut result = 0;
 
     for (i, val) in buf.iter().enumerate() {
@@ -78,7 +78,7 @@ fn dump_ram(emu: &Unicorn<()>, address: u32, size: u32, file_path: &str) {
     let content = emu.mem_read_as_vec(address.into(), size as usize)
         .expect("Failed to read RAM");
 
-    let size = round_up(find_last_non_zero_byte(&content), 4);
+    let size = round_up(find_last_non_zero_byte_idx(&content)+1, 4);
     let mut content = &content[0..size];
 
     println!("Dumping RAM at addr=0x{:08x} size=0x{:08x} to {}", address, size, file_path);
