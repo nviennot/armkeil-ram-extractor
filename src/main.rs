@@ -20,6 +20,10 @@ struct Args {
     #[clap(short, long)]
     output: String,
 
+    /// Vector table offset. Useful when the firmware has a bootloader to skip
+    #[clap(long, parse(try_from_str=maybe_hex), default_value_t=0)]
+    skip: u32,
+
     /// Base ROM address
     #[clap(long, parse(try_from_str=maybe_hex))]
     base_rom: Option<u32>,
@@ -86,6 +90,7 @@ fn main() -> Result<()> {
     let firmware = get_file_content(&args.rom)?;
 
     let mut fw = Bytes::from(firmware.clone());
+    fw.advance(args.skip as usize);
     let sp_addr = fw.get_u32_le();
     let reset_addr = fw.get_u32_le();
 
