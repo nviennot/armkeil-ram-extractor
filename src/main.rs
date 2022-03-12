@@ -78,7 +78,7 @@ fn dump_ram(emu: &Unicorn<()>, address: u32, size: u32, file_path: &str) {
     let size = round_up(find_last_non_zero_byte(&content), 4);
     let mut content = &content[0..size];
 
-    println!("Dumping RAM at addr=0x{:08x} size={} to {}", address, size, file_path);
+    println!("Dumping RAM at addr=0x{:08x} size=0x{:08x} to {}", address, size, file_path);
 
     let mut file = fs::File::create(&file_path).expect("Failed to create RAM file");
     file.write_all(&mut content).expect("Failed to write to RAM file");
