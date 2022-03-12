@@ -5,12 +5,16 @@ use unicorn_engine::unicorn_const::{Arch, Mode, Permission, HookType};
 use std::io::prelude::*;
 use std::fs;
 use clap::Parser;
+use clap::AppSettings;
 use anyhow::{Result, Context};
 
 use clap_num::maybe_hex;
 
 /// Decompress .data section from a Keil compiled firmware
 #[derive(Parser, Debug)]
+#[clap(
+    global_setting(AppSettings::DeriveDisplayOrder)
+)]
 struct Args {
     /// Firmware file
     #[clap(short, long)]
@@ -32,12 +36,11 @@ struct Args {
     #[clap(long, parse(try_from_str=maybe_hex))]
     base_ram: Option<u32>,
 
-    /// Initial PC address. Don't forget to add 1 to be in thumb mode.
+    /// Initial PC address. Address should be an odd number to be in thumb mode.
     #[clap(long, parse(try_from_str=maybe_hex))]
     start_addr: Option<u32>,
 
-    /// PC address at which to stop the emulation. If not specified, will stop
-    /// if executing at an address lower than the reset address.
+    /// PC address at which to stop the emulation.
     #[clap(long, parse(try_from_str=maybe_hex))]
     stop_addr: Option<u32>,
 
