@@ -32,9 +32,9 @@ struct Args {
     #[clap(long, parse(try_from_str=maybe_hex))]
     base_rom: Option<u32>,
 
-    /// Base RAM address
-    #[clap(long, parse(try_from_str=maybe_hex))]
-    base_ram: Option<u32>,
+    /// Base RAM address. Can be repeated.
+    #[clap(long="base-ram", parse(try_from_str=maybe_hex))]
+    base_rams: Vec<u32>,
 
     /// Initial PC address. Address should be an odd number to be in thumb mode.
     #[clap(long, parse(try_from_str=maybe_hex))]
@@ -101,20 +101,27 @@ fn main() -> Result<()> {
     // The second routine is what we are after.
     let start_addr = args.start_addr.unwrap_or(reset_addr + 4);
     let base_rom = args.base_rom.unwrap_or(reset_addr & 0xFF00_0000);
-    let base_ram = args.base_ram.unwrap_or(sp_addr & 0xFF00_0000);
+    let mut base_rams = args.base_rams;
+    if base_rams.is_empty() {
+        base_rams.push(sp_addr & 0xFF00_0000);
+    }
 
     let rom_size = round_up(firmware.len(), 4096);
     let ram_size = args.ram_size;
 
     println!("ROM segment: 0x{:08x}", base_rom);
-    println!("RAM segment: 0x{:08x}", base_ram);
+    for base_ram in &base_rams {
+        println!("RAM segment: 0x{:08x}", base_ram);
+    }
     println!("Start addr:  0x{:08x}", start_addr);
 
     let mut emu = Unicorn::new(Arch::ARM, Mode::LITTLE_ENDIAN)
         .expect("failed to initialize Unicorn instance");
 
     emu.mem_map(base_rom.into(), rom_size as usize, Permission::ALL).expect("failed to map rom");
-    emu.mem_map(base_ram.into(), ram_size as usize, Permission::ALL).expect("failed to map ram");
+    for base_ram in &base_rams {
+        emu.mem_map((*base_ram).into(), ram_size as usize, Permission::ALL).expect("failed to map ram");
+    }
 
     emu.mem_write(base_rom.into(), &firmware).expect("failed to initialize rom segment");
 
@@ -123,6 +130,7 @@ fn main() -> Result<()> {
     emu.add_mem_hook(HookType::MEM_UNMAPPED, 0, u64::MAX, |emu, type_, addr, size, _| {
         let pc = emu.reg_read(RegisterARM::PC).expect("failed to get pc");
         println!("mem: {:?} inst_addr=0x{:08x} mem_addr=0x{:08x}, size = {}", type_, pc, addr, size);
+        println!("Use `--stop-addr` to stop the execution, or add multiple ram blocks with --base-ram");
         false
     }).expect("add_mem_hook failed");
 
@@ -148,7 +156,16 @@ fn main() -> Result<()> {
 
     println!("Emulation finished");
 
-    dump_ram(&emu, base_ram, ram_size, &args.output);
+    if base_rams.len() == 1 {
+        dump_ram(&emu, base_rams[0], ram_size, &args.output);
+    } else {
+        for base_ram in &base_rams {
+            let filename = std::path::Path::new(&args.output);
+            let base_filename = filename.file_stem().unwrap().to_string_lossy();
+            let filename = format!("{}-{:08x}.bin", base_filename, *base_ram);
+            dump_ram(&emu, *base_ram, ram_size, &filename);
+        }
+    }
 
     Ok(())
 }
