@@ -4,6 +4,7 @@ use unicorn_engine::unicorn_const::{Arch, Mode, Permission, HookType};
 
 use std::io::prelude::*;
 use std::fs;
+use std::sync::{Arc, Mutex};
 use clap::Parser;
 use clap::AppSettings;
 use anyhow::{Result, Context};
@@ -62,7 +63,7 @@ fn round_up(n: usize, boundary: usize) -> usize {
     ((n + boundary - 1) / boundary) * boundary
 }
 
-fn find_last_non_zero_byte_idx(buf: &[u8]) -> usize {
+fn _find_last_non_zero_byte_idx(buf: &[u8]) -> usize {
     let mut result = 0;
 
     for (i, val) in buf.iter().enumerate() {
@@ -74,14 +75,14 @@ fn find_last_non_zero_byte_idx(buf: &[u8]) -> usize {
     result
 }
 
-fn dump_ram(emu: &Unicorn<()>, address: u32, size: u32, file_path: &str) {
-    let content = emu.mem_read_as_vec(address.into(), size as usize)
+fn dump_ram(emu: &Unicorn<()>, address: u32, size: usize, file_path: &str) {
+    println!("Dumping RAM at addr=0x{:08x} size=0x{:08x} to {}", address, size, file_path);
+
+    let content = emu.mem_read_as_vec(address.into(), size)
         .expect("Failed to read RAM");
 
-    let size = round_up(find_last_non_zero_byte_idx(&content)+1, 4);
+    //let size = round_up(find_last_non_zero_byte_idx(&content)+1, 4);
     let mut content = &content[0..size];
-
-    println!("Dumping RAM at addr=0x{:08x} size=0x{:08x} to {}", address, size, file_path);
 
     let mut file = fs::File::create(&file_path).expect("Failed to create RAM file");
     file.write_all(&mut content).expect("Failed to write to RAM file");
@@ -127,6 +128,27 @@ fn main() -> Result<()> {
 
     emu.reg_write(RegisterARM::SP, sp_addr.into()).expect("failed to set pc");
 
+    let ram_sizes = base_rams.iter().map(|_| 0).collect::<Vec<_>>();
+
+    let base_rams = Arc::new(base_rams);
+    let ram_sizes = Arc::new(Mutex::new(ram_sizes));
+
+    {
+        let base_rams = Arc::clone(&base_rams);
+        let ram_sizes = Arc::clone(&ram_sizes);
+        emu.add_mem_hook(HookType::MEM_WRITE, 0, u64::MAX, move |_emu, _type, addr, size, _| {
+            let addr = addr as u32;
+            let size = size as u32;
+            for (base, max_size) in base_rams.iter().zip(ram_sizes.lock().unwrap().iter_mut()) {
+                if *base <= addr && addr <= *base + ram_size {
+                    *max_size = (*max_size).max(addr+size-base);
+                }
+            }
+
+            true
+        }).expect("add_mem_hook failed");
+    }
+
     emu.add_mem_hook(HookType::MEM_UNMAPPED, 0, u64::MAX, |emu, type_, addr, size, _| {
         let pc = emu.reg_read(RegisterARM::PC).expect("failed to get pc");
         println!("mem: {:?} inst_addr=0x{:08x} mem_addr=0x{:08x}, size = {}", type_, pc, addr, size);
@@ -157,13 +179,13 @@ fn main() -> Result<()> {
     println!("Emulation finished");
 
     if base_rams.len() == 1 {
-        dump_ram(&emu, base_rams[0], ram_size, &args.output);
+        dump_ram(&emu, base_rams[0], ram_sizes.lock().unwrap()[0] as usize, &args.output);
     } else {
-        for base_ram in &base_rams {
+        for (base_ram, max_size) in base_rams.iter().zip(ram_sizes.lock().unwrap().iter()) {
             let filename = std::path::Path::new(&args.output);
             let base_filename = filename.file_stem().unwrap().to_string_lossy();
             let filename = format!("{}-{:08x}.bin", base_filename, *base_ram);
-            dump_ram(&emu, *base_ram, ram_size, &filename);
+            dump_ram(&emu, *base_ram, *max_size as usize, &filename);
         }
     }
 
